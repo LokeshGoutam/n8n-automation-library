@@ -1,0 +1,811 @@
+{
+  "name": "Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "company",
+        "operation": "searchByDomain",
+        "domain": "={{ $json.hubspotDomain }}",
+        "options": {
+          "properties": [
+            "arr",
+            "name"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2,
+      "position": [
+        624,
+        704
+      ],
+      "id": "8f54bc78-eba2-4ecf-84dc-8fb475b06631",
+      "name": "HubSpot: Search by Domain",
+      "credentials": {
+        "hubspotOAuth2Api": {
+          "id": "JcbVNfPLGQRHAt9i",
+          "name": "HubSpot account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "54503a6a-a914-4915-9d46-8793549438a0",
+              "leftValue": "={{ String($json.companyId || $json.id || '') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        912,
+        688
+      ],
+      "id": "477e3b4d-3162-4ea9-9e3b-51ed298773a9",
+      "name": "Company Found?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const company = $input.first().json;\nconst ticketData = $('Zendesk Trigger').item.json;\n\n// Extract ARR safely from various HubSpot response formats\nconst arr = company.properties?.arr?.value || company.properties?.arr || null;\nconst companyName = company.properties?.name?.value || company.properties?.name || company.name || 'Unknown';\n\nreturn {\n  json: {\n    arr: arr,\n    companyName: companyName,\n    companyId: company.id,\n    ticketId: ticketData['ticket.id'],\n    ticketSubject: ticketData['ticket.title'],\n    ticketDescription: ticketData['ticket.description'],\n    existingTags: ticketData['ticket.tags'] || []\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        576
+      ],
+      "id": "3aa25870-dc48-4020-ab5e-606304b2cf49",
+      "name": "Extract ARR & Ticket Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "arr-exists",
+              "leftValue": "={{ $json.arr }}",
+              "rightValue": "",
+              "operator": {
+                "type": "any",
+                "operation": "exists"
+              }
+            },
+            {
+              "id": "arr-not-null",
+              "leftValue": "={{ $json.arr }}",
+              "rightValue": "",
+              "operator": {
+                "type": "any",
+                "operation": "notEqual"
+              }
+            },
+            {
+              "id": "1a7b0978-f87b-4017-a819-68761e0489e9",
+              "leftValue": "={{ Number($json.arr || 0) }}\n",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "looseTypeValidation": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        720
+      ],
+      "id": "30d83e5d-96a8-48fd-940d-a958577afb68",
+      "name": "ARR Exists?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "d65ce2eb-0846-4cf6-9e64-cda96b7ed3cb",
+              "leftValue": "={{ $json.arr }}",
+              "rightValue": 5000,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "looseTypeValidation": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1904,
+        592
+      ],
+      "id": "a07ce2d9-011e-457e-8730-7578c6344c56",
+      "name": "ARR < $5000?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "prepare-context",
+              "name": "kbContext",
+              "value": "={{ $json.map(article => `Article: ${article.title}\\nURL: ${article.html_url}\\nContent: ${article.body.replace(/<[^>]*>/g, ' ').trim().substring(0, 500)}`).join('\\n\\n---\\n\\n') }}",
+              "type": "string"
+            },
+            {
+              "id": "ticket-data",
+              "name": "ticketSubject",
+              "value": "={{ $('Extract ARR & Ticket Data').item.json.ticketSubject }}",
+              "type": "string"
+            },
+            {
+              "id": "ticket-desc",
+              "name": "ticketDescription",
+              "value": "={{ $('Extract ARR & Ticket Data').item.json.ticketDescription }}",
+              "type": "string"
+            },
+            {
+              "id": "company",
+              "name": "companyName",
+              "value": "={{ $('Extract ARR & Ticket Data').item.json.companyName }}",
+              "type": "string"
+            },
+            {
+              "id": "ticket-id",
+              "name": "ticketId",
+              "value": "={{ $('Extract ARR & Ticket Data').item.json.ticketId }}",
+              "type": "string"
+            },
+            {
+              "id": "tags",
+              "name": "existingTags",
+              "value": "={{ $('Extract ARR & Ticket Data').item.json.existingTags }}",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -784,
+        -16
+      ],
+      "id": "22959d68-0bb7-4107-b9b1-6b16fdf8866f",
+      "name": "Prepare AI Context",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "maxTokens": 800,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -48
+      ],
+      "id": "d1f4ad98-a26b-40aa-94d4-4af65e87b186",
+      "name": "AI: Generate Response",
+      "credentials": {
+        "openAiApi": {
+          "id": "BrPnJmsNqvYUhiWi",
+          "name": "OpenAi Arijeet"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "update",
+        "id": "={{ $json.ticketId }}",
+        "updateFields": {
+          "assigneeEmail": "",
+          "publicReply": "={{ $json.zendeskComment }}",
+          "status": "open",
+          "subject": "={{ 'Re: ' + ($json.ticketSubject || 'Support Request') }}",
+          "tags": "={{ [...new Set(\n  ( $json.existingTags || [] )\n    .filter(tag => tag !== 'n8n_processing')\n    .concat('ai_agent_automated_resolution')\n)].join(',') }}"
+        }
+      },
+      "type": "n8n-nodes-base.zendesk",
+      "typeVersion": 1,
+      "position": [
+        2704,
+        768
+      ],
+      "id": "5c20fbd1-35fc-470c-99da-5f0a0dd13acf",
+      "name": "Send AI Reply to Ticket",
+      "credentials": {
+        "zendeskOAuth2Api": {
+          "id": "z4vg8H0eyuDEp7Po",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        128,
+        32
+      ],
+      "id": "ffc30e70-8738-450b-a4c5-801ddae32431",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "BrPnJmsNqvYUhiWi",
+          "name": "OpenAi Arijeet"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "GPT-4O"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a professional customer support agent for a SaaS company.\n\nUse ONLY the provided knowledge base articles to answer the ticket.\nIf the KB does not clearly solve the issue, say that the support team will follow up.\n\nDo NOT mention AI, automation, or bots.\nBe polite, clear, and concise.\n\nEnd your response with:\n\"Please reply with 'Yes, this helped' or 'No, I still need help'.\"\n"
+            },
+            {
+              "content": "=Ticket Subject:\n{{ $json.ticketSubject }}\n\nTicket Description:\n{{ $json.ticketDescription }}\n\nKnowledge Base Articles:\n{{ $json.kbContext }}\n"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 800,
+          "temperature": 0.3,
+          "truncation": true
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -592,
+        -16
+      ],
+      "id": "1fbb0751-5ffe-42e1-978f-2ff5d39beee6",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "BrPnJmsNqvYUhiWi",
+          "name": "OpenAi Arijeet"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": {\n    \"id\": \"pmpt_694948c0bf80819787443216ad56bf490f38cba0284793cb\",\n    \"version\": \"9\"\n  },\n  \"input\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify([$json.arr, $json.companyName, $json.ticketId, $json.ticketDescription].join('\\n')) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2272,
+        752
+      ],
+      "id": "b3bc873e-4d4d-4495-b154-07ff4af462a3",
+      "name": "AI Chat bot",
+      "credentials": {
+        "openAiApi": {
+          "id": "eEN82mAOA2PvDTGQ",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $items('Extract ARR & Ticket Data')[0].json;\nconst aiResponse = $json;\n\n// Extract AI text from OpenAI Responses API\nlet aiText = '';\n\nif (aiResponse && Array.isArray(aiResponse.output)) {\n  for (const block of aiResponse.output) {\n    if (block.content && Array.isArray(block.content)) {\n      for (const c of block.content) {\n        if (c.type === 'output_text' && c.text) {\n          aiText += c.text;\n        }\n      }\n    }\n  }\n}\n\n// Safe fallback (different from Zendesk system text)\nif (!aiText || aiText.trim().length < 10) {\n  aiText = 'Thanks for contacting RChilli Support. Our team will review your request and respond shortly.';\n}\n\nreturn {\n  json: {\n    ticketId: Number(original.ticketId),\n    ticketSubject: original.ticketSubject,\n    zendeskComment: aiText,\n    existingTags: original.existingTags || []\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        768
+      ],
+      "id": "3c1fc71c-72b7-4f45-95f7-746c2af5b13b",
+      "name": "Normalizing response"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://chat.googleapis.com/v1/spaces/AAQAzuBTiYM/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=JyORbFKYl1G3xQTgNCg3t6xnohXo7Ttrg7Of29doYEU",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚨 *High ARR Zendesk Ticket Alert*\\n\\nCompany: {{ $json.companyName }}\\nARR: ${{ $json.arr }}\\nTicket ID: {{ $json.ticketId }}\\nSubject: {{ $json.ticketSubject }}\\n\\nPlease check this ticket in Zendesk.\"\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2384,
+        368
+      ],
+      "id": "d6927096-fcec-4ee4-82dc-66035677e9ac",
+      "name": "Alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        944
+      ],
+      "id": "440808f5-5fb5-4e79-a48a-ece2cef73092",
+      "name": "STOP"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        944
+      ],
+      "id": "1da904dc-6f8d-4bcf-9058-ef3503d96ed0",
+      "name": "STOP1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const blockedEmails = [\n  'accounts@rchilli.com'\n];\n\nconst requesterEmail = ($json['ticket.requester.email'] || '').toLowerCase();\n\nif (blockedEmails.includes(requesterEmail)) {\n  return []; // hard stop\n}\n\nreturn [{ json: $json }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        720
+      ],
+      "id": "278d2315-e7d5-4a0a-a1f6-7ef9f5e620cf",
+      "name": "Blocked Account mail"
+    },
+    {
+      "parameters": {
+        "jsCode": "const email =\n  (\n    $json['ticket.requester.email'] ||               // if coming from trigger payload\n    $json?.ticket?.requester?.email ||               // alternate shape\n    $json?.requester?.email ||                       // another common shape\n    $json?.via?.source?.from?.address ||             // what you have right now\n    ''\n  )\n  .toLowerCase()\n  .trim();\n\nconst domain = email.includes('@') ? email.split('@').pop() : '';\n\nreturn [{\n  json: {\n    ...$json,\n    hubspotDomain: domain,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        736
+      ],
+      "id": "30c25d3b-cc99-4629-9d87-5d77c46afaf4",
+      "name": "extract"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "get",
+        "id": "={{ $json['ticket.id'] }}"
+      },
+      "type": "n8n-nodes-base.zendesk",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        704
+      ],
+      "id": "75adbb3c-d079-4ef6-b4d2-3ae8b423fc52",
+      "name": "Get a ticket",
+      "credentials": {
+        "zendeskOAuth2Api": {
+          "id": "z4vg8H0eyuDEp7Po",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Workflow Entry & Data Prep:\n*Trigger & Input Preparation\n\n*Triggers workflow on new Zendesk tickets\n\n*Blocks internal/test email accounts\n\n*Extracts requester email, organization name, and domain",
+        "height": 384,
+        "width": 896
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -512,
+        496
+      ],
+      "typeVersion": 1,
+      "id": "026098de-dbb5-43c5-ad3a-0cec4514647e",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "HubSpot Company Resolution:\nCompany Identification (HubSpot)\n\n*Attempts company lookup using email domain\n\n*Normalizes HubSpot response\n\n*Determines whether a company was found",
+        "height": 368,
+        "width": 480,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        576,
+        512
+      ],
+      "typeVersion": 1,
+      "id": "bb1c6194-e8d7-413f-92a2-5f661d40be3b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Ticket & ARR Extraction\n\n*Extracts ticket metadata and company ARR\n\n*Handles missing or null ARR values",
+        "height": 624,
+        "width": 576,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1216,
+        240
+      ],
+      "typeVersion": 1,
+      "id": "6baa31e4-601e-4bad-81f6-066a6d03d67f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "AI Response & Notifications:\n\n*Generates AI-based ticket response\n\n*Posts reply to Zendesk\n\n*Sends internal alerts for visibility",
+        "height": 672,
+        "width": 976,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1888,
+        256
+      ],
+      "typeVersion": 1,
+      "id": "a2c0ffee-52ea-4a94-8449-78a7cb08616e",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "options": {
+          "fields": [
+            "ticket.description",
+            "ticket.id",
+            "ticket.requester.email",
+            "ticket.organization.name"
+          ]
+        },
+        "conditions": {
+          "any": [
+            {
+              "value": "new"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.zendeskTrigger",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        704
+      ],
+      "id": "68077760-5250-4f95-82a9-7413a5865e8f",
+      "name": "Zendesk Trigger",
+      "webhookId": "ef81c094-02e0-40d1-8ccb-6b82054c2d3e",
+      "credentials": {
+        "zendeskOAuth2Api": {
+          "id": "z4vg8H0eyuDEp7Po",
+          "name": "Zendesk account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2384,
+        576
+      ],
+      "id": "a2b4a10d-61db-40d1-85f5-9c4a474006bf",
+      "name": "STOP2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "afb5fcfe-6c31-4df2-988f-b9f29f1db6c4",
+              "leftValue": "={{ $json.ticketSubject || '' }}",
+              "rightValue": "Accepted",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2112,
+        560
+      ],
+      "id": "e60c74e7-332a-41f8-8e2e-5e8191750ee2",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HubSpot: Search by Domain": {
+      "main": [
+        [
+          {
+            "node": "Company Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Company Found?": {
+      "main": [
+        [
+          {
+            "node": "Extract ARR & Ticket Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "STOP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract ARR & Ticket Data": {
+      "main": [
+        [
+          {
+            "node": "ARR Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ARR Exists?": {
+      "main": [
+        [
+          {
+            "node": "STOP1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ARR < $5000?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ARR < $5000?": {
+      "main": [
+        [
+          {
+            "node": "AI Chat bot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Context": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Chat bot": {
+      "main": [
+        [
+          {
+            "node": "Normalizing response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizing response": {
+      "main": [
+        [
+          {
+            "node": "Send AI Reply to Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Blocked Account mail": {
+      "main": [
+        [
+          {
+            "node": "extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Search by Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a ticket": {
+      "main": [
+        [
+          {
+            "node": "Blocked Account mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Zendesk Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get a ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "STOP2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "96a8f8c2-6e70-4126-8eb2-d73f95cb4257",
+  "meta": {
+    "instanceId": "d110be376c8d26816b58a605a6d4b016194516c5cee96a469645a25af83a54d8"
+  },
+  "id": "pL2-_8zH0zYWL8PVwe_9w",
+  "tags": []
+}
